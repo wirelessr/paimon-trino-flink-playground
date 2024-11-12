@@ -16,7 +16,7 @@ services:
     networks:
       paimon-net:
     volumes:
-      - "./paimon-trino-427:/usr/lib/trino/plugin/paimon"
+      - "./paimon:/usr/lib/trino/plugin/paimon"
       - "./paimon-s3.properties:/etc/trino/catalog/paimon.properties"
     ports:
       - 8080:8080

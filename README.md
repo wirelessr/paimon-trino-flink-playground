@@ -1,6 +1,7 @@
 # Paimon Playground
 
 - [paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz](https://repository.apache.org/content/groups/snapshots/org/apache/paimon/paimon-trino-427/0.8-SNAPSHOT/paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz)
+    - `tar -zxvf paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz`
 
 ## Flink
 
