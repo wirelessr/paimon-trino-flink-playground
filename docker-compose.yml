@@ -1,0 +1,126 @@
+version: "3"
+
+services:
+  #aws-cli:
+  #  image: amazon/aws-cli
+  #  container_name: aws-cli
+  #  entrypoint: tail -f /dev/null
+  #  networks:
+  #    paimon-net:
+  #  volumes:
+  #    - "./.aws:/root/.aws"
+
+  trino:
+    image: trinodb/trino:427
+    container_name: trino
+    networks:
+      paimon-net:
+    volumes:
+      - "./paimon-trino-427:/usr/lib/trino/plugin/paimon"
+      - "./paimon-s3.properties:/etc/trino/catalog/paimon.properties"
+    ports:
+      - 8080:8080
+
+  storage:
+    image: minio/minio
+    container_name: storage
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_DOMAIN=storage
+      - MINIO_REGION_NAME=us-east-1
+      - MINIO_REGION=us-east-1
+    networks:
+      paimon-net:
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+  # Minio Client Container
+  mc:
+    depends_on:
+      - storage
+    image: minio/mc
+    container_name: mc
+    networks:
+      paimon-net:
+        aliases:
+          - minio.storage
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://storage:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc mb minio/iceberg;
+      /usr/bin/mc policy set public minio/warehouse;
+      /usr/bin/mc policy set public minio/iceberg;
+      tail -f /dev/null
+      " 
+  
+  starrocks:
+    image: starrocks/allin1-ubuntu
+    container_name: starrocks
+    networks:
+      paimon-net:
+    ports:
+      - 9030:9030
+      - 8040:8040
+      - 8030:8030
+
+  # Flink Job Manager
+  flink-jobmanager:
+    image: alexmerced/flink-iceberg:latest
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    networks:
+      paimon-net:
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_ENDPOINT=http://minio.storage:9000
+      - S3_PATH_STYLE_ACCESS=true
+    platform: linux/amd64
+    volumes:
+      - "./paimon-flink-1.16-0.9.0.jar:/opt/flink/lib/paimon-flink-1.16-0.9.0.jar"
+      - "./paimon-flink-action-0.9.0.jar:/opt/flink/lib/paimon-flink-action-0.9.0.jar"
+      - "./paimon-s3-0.9.0.jar:/opt/flink/lib/paimon-s3-0.9.0.jar"
+  # Flink Task Manager
+  flink-taskmanager:
+    image: alexmerced/flink-iceberg:latest
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    networks:
+      paimon-net:
+    scale: 1
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_ENDPOINT=http://minio.storage:9000
+      - S3_PATH_STYLE_ACCESS=true
+    platform: linux/amd64
+    volumes:
+      - "./paimon-flink-1.16-0.9.0.jar:/opt/flink/lib/paimon-flink-1.16-0.9.0.jar"
+      - "./paimon-flink-action-0.9.0.jar:/opt/flink/lib/paimon-flink-action-0.9.0.jar"
+      - "./paimon-s3-0.9.0.jar:/opt/flink/lib/paimon-s3-0.9.0.jar"
+    
+
+networks:
+  paimon-net: 
