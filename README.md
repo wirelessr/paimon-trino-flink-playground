@@ -1,11 +1,33 @@
-# Paimon Playground
+# Apache Paimon Playground with Flink & Trino
 
-- [paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz](https://repository.apache.org/content/groups/snapshots/org/apache/paimon/paimon-trino-427/0.8-SNAPSHOT/paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz)
-    - `tar -zxvf paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz`
+![image](https://github.com/user-attachments/assets/52f8846b-a1be-4b71-af44-12ca307b696c)
 
-## Flink
+## How to use
 
-https://paimon.apache.org/docs/0.9/flink/quick-start/
+> NOTE: Since some of the links to the official Paimon files are not working, I've put the files into this repo. However, some of the files are huge, so I put them in via LFS, so be sure to install `git-lfs`.
+
+Trino driver is in `paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz`.
+
+```bash
+tar -zxvf paimon-trino-427-0.8-20241112.000605-197-plugin.tar.gz
+```
+
+Then it will run normally with `docker compose up -d`.
+
+```bash
+docker compose up -d
+```
+
+### Flink
+
+Let's start by connecting to Flink SQL.
+
+```bash
+docker compose exec flink-jobmanager ./bin/sql-client.sh
+./bin/sql-client.sh
+```
+
+To write data using Flink we first need to create the correct catalog.
 
 ```sql
 CREATE CATALOG my_catalog WITH (
@@ -18,37 +40,77 @@ CREATE CATALOG my_catalog WITH (
 );
 ```
 
-## Trino
+As shown in the above commands, we're using the `MinIO` as an `S3` to store the Paimon.
+
+The next step in creating the table and writing the data is quite simple, just run the commands according to the [official documentat](https://paimon.apache.org/docs/0.9/flink/quick-start/).
+
+```sql
+USE CATALOG my_catalog;
+
+-- create a word count table
+CREATE TABLE word_count (
+    word STRING PRIMARY KEY NOT ENFORCED,
+    cnt BIGINT
+);
+
+-- create a word data generator table
+CREATE TEMPORARY TABLE word_table (
+    word STRING
+) WITH (
+    'connector' = 'datagen',
+    'fields.word.length' = '1'
+);
+
+-- paimon requires checkpoint interval in streaming mode
+SET 'execution.checkpointing.interval' = '10 s';
+
+-- write streaming data to dynamic table
+INSERT INTO word_count SELECT word, COUNT(*) FROM word_table GROUP BY word;
+```
+
+Then we actually read it and see the result of what we've written.
+
+```sql
+-- use tableau result mode
+SET 'sql-client.execution.result-mode' = 'tableau';
+
+-- switch to batch mode
+RESET 'execution.checkpointing.interval';
+SET 'execution.runtime-mode' = 'batch';
+
+-- olap query the table
+SELECT * FROM word_count;
+```
+
+### Trino
+
+Let's go to Trino's cli first.
+
+```bash
+docker compose exec trino trino
+```
+
+Trino's paimon catalog is already set up, but I didn't add a new schema but just used the default one.
+
+So we can query the Flink write result directly.
 
 ```sql
 SELECT * FROM paimon.default.word_count;
 ```
 
-The result should be as follows.
+We should see something similar to the Flink query.
 
-```
- word |  cnt
-------+--------
- 0    | 311054
- 1    | 312766
- 2    | 312566
- 3    | 311228
- 4    | 311448
- 5    | 311613
- 6    | 311479
- 7    | 312043
- 8    | 312506
- 9    | 311642
- a    | 310712
- b    | 312189
- c    | 312293
- d    | 312391
- e    | 312015
- f    | 312055
-(16 rows)
+### StarRocks
+
+This is an extra, just to show how much attention Paimon is getting now that many New SQL databases are starting to support it.
+
+Prepare a `mysql` client locally to connect to StarRocks.
+
+```bash
+mysql -P 9030 -h 127.0.0.1 -u root --prompt="StarRocks > "
 ```
 
-## StarRocks
+We still need to create a catalog.
 
 ```sql
 CREATE EXTERNAL CATALOG paimon_catalog_flink
@@ -64,27 +126,11 @@ PROPERTIES
 );
 ```
 
-Switch to db.
+The mysql client should not support Trino's table locator format: `<catalog>. <schema>. <table>`, so we have to switch to the db before we can query.
 
 ```sql
-use paimon_catalog_flink.default;
+USE paimon_catalog_flink.default;
+SELECT * FROM word_count;
 ```
 
-Query the table.
-
-```sql
-select * from word_count;
-```
-
-
-## Issue List
-
-> Path missing in file system location: `s3://warehouse`
-
-warehouse=s3://<namespace>/<warehouse dir>
-
-[Reference link](https://github.com/apache/paimon-trino/issues/26#issuecomment-2187113570)
-
-
-
-> Query 20241112_023941_00000_bdn6f failed: org.apache.paimon.fs.UnsupportedSchemeException: Could not find a file io implementation for scheme 's3' in the classpath. TrinoFileIOLoader also cannot access this path.  Hadoop FileSystem also cannot access this path 's3://minio/warehouse'.
+The results here will be similar to the above.
