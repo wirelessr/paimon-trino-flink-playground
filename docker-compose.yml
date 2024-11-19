@@ -9,6 +9,17 @@ x-common-volumes: &common-volumes
     - "./flink-shaded-hadoop-2-uber-2.8.3-10.0.jar:/opt/flink/lib/flink-shaded-hadoop-2-uber-2.8.3-10.0.jar"
 
 services:
+  trino:
+    image: trinodb/trino:427
+    container_name: trino
+    networks:
+      paimon-net:
+    volumes:
+      - "./paimon:/usr/lib/trino/plugin/paimon"
+      - "./paimon-s3.properties:/etc/trino/catalog/paimon.properties"
+    ports:
+      - 8080:8080
+
   storage:
     image: minio/minio
     container_name: storage
