@@ -134,3 +134,22 @@ SELECT * FROM word_count;
 ```
 
 The results here will be similar to the above.
+
+## MySQL Catalog
+
+Flink SQL
+
+```sql
+CREATE CATALOG mysql_catalog WITH (
+    'type' = 'paimon',
+    'metastore' = 'jdbc',
+    'uri' = 'jdbc:mysql://mysql:3306/catalog',
+    'jdbc.user' = 'root',
+    'jdbc.password' = 'example',
+    'warehouse' = 's3://warehouse/mysql',
+    's3.endpoint' = 'http://storage:9000',
+    's3.access-key' = 'admin',
+    's3.secret-key' = 'password',
+    's3.path.style.access' = 'true'
+);
+```
