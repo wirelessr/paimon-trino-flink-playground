@@ -1,18 +1,14 @@
 version: "3"
 
+x-common-volumes: &common-volumes
+  volumes:
+    - "./paimon-flink-1.19-0.9.0.jar:/opt/flink/lib/paimon-flink-1.19-0.9.0.jar"
+    - "./paimon-flink-action-0.9.0.jar:/opt/flink/lib/paimon-flink-action-0.9.0.jar"
+    - "./paimon-s3-0.9.0.jar:/opt/flink/lib/paimon-s3-0.9.0.jar"
+    - "./mysql-connector-java-8.0.30.jar:/opt/flink/lib/mysql-connector-java-8.0.30.jar"
+    - "./flink-shaded-hadoop-2-uber-2.8.3-10.0.jar:/opt/flink/lib/flink-shaded-hadoop-2-uber-2.8.3-10.0.jar"
+
 services:
-
-  trino:
-    image: trinodb/trino:427
-    container_name: trino
-    networks:
-      paimon-net:
-    volumes:
-      - "./paimon:/usr/lib/trino/plugin/paimon"
-      - "./paimon-s3.properties:/etc/trino/catalog/paimon.properties"
-    ports:
-      - 8080:8080
-
   storage:
     image: minio/minio
     container_name: storage
@@ -28,7 +24,7 @@ services:
       - 9001:9001
       - 9000:9000
     command: ["server", "/data", "--console-address", ":9001"]
-  # Minio Client Container
+
   mc:
     depends_on:
       - storage
@@ -52,21 +48,10 @@ services:
       /usr/bin/mc policy set public minio/warehouse;
       /usr/bin/mc policy set public minio/iceberg;
       tail -f /dev/null
-      " 
-  
-  starrocks:
-    image: starrocks/allin1-ubuntu
-    container_name: starrocks
-    networks:
-      paimon-net:
-    ports:
-      - 9030:9030
-      - 8040:8040
-      - 8030:8030
+      "
 
-  # Flink Job Manager
   flink-jobmanager:
-    image: alexmerced/flink-iceberg:latest
+    image: flink:1.19
     ports:
       - "8081:8081"
     command: jobmanager
@@ -83,13 +68,10 @@ services:
       - S3_ENDPOINT=http://minio.storage:9000
       - S3_PATH_STYLE_ACCESS=true
     platform: linux/amd64
-    volumes:
-      - "./paimon-flink-1.16-0.9.0.jar:/opt/flink/lib/paimon-flink-1.16-0.9.0.jar"
-      - "./paimon-flink-action-0.9.0.jar:/opt/flink/lib/paimon-flink-action-0.9.0.jar"
-      - "./paimon-s3-0.9.0.jar:/opt/flink/lib/paimon-s3-0.9.0.jar"
-  # Flink Task Manager
+    <<: *common-volumes
+
   flink-taskmanager:
-    image: alexmerced/flink-iceberg:latest
+    image: flink:1.19
     depends_on:
       - flink-jobmanager
     command: taskmanager
@@ -108,11 +90,17 @@ services:
       - S3_ENDPOINT=http://minio.storage:9000
       - S3_PATH_STYLE_ACCESS=true
     platform: linux/amd64
-    volumes:
-      - "./paimon-flink-1.16-0.9.0.jar:/opt/flink/lib/paimon-flink-1.16-0.9.0.jar"
-      - "./paimon-flink-action-0.9.0.jar:/opt/flink/lib/paimon-flink-action-0.9.0.jar"
-      - "./paimon-s3-0.9.0.jar:/opt/flink/lib/paimon-s3-0.9.0.jar"
-    
+    <<: *common-volumes
+
+  mysql:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: example
+      MYSQL_DATABASE: catalog
+    networks:
+      paimon-net:
+    ports:
+      - 3306:3306
 
 networks:
-  paimon-net: 
+  paimon-net:
