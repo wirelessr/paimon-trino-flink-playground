@@ -137,7 +137,7 @@ The results here will be similar to the above.
 
 ## MySQL Catalog
 
-Flink SQL
+Flink supports JDBC metastore, which allows using MySQL to persist Paimon metadata seamlessly. Here's an example of creating a MySQL-based catalog.
 
 ```sql
 CREATE CATALOG mysql_catalog WITH (
@@ -153,3 +153,5 @@ CREATE CATALOG mysql_catalog WITH (
     's3.path.style.access' = 'true'
 );
 ```
+
+However, **Trino does not support JDBC metastore** for Paimon so far.
