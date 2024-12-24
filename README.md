@@ -24,7 +24,6 @@ Let's start by connecting to Flink SQL.
 
 ```bash
 docker compose exec flink-jobmanager ./bin/sql-client.sh
-./bin/sql-client.sh
 ```
 
 To write data using Flink we first need to create the correct catalog.
